@@ -1,0 +1,5 @@
+project(lab1)
+add_executable(lab1 src/main.cpp)
+target_compile_definitions(lab1 PUBLIC ASIO_STANDALONE)
+target_compile_options(lab1 PUBLIC -std=c++17)
+target_link_libraries(lab1 pthread viface)
