@@ -1,8 +1,10 @@
-#include <iostream>           //include cout,cerr
-#include <asio.hpp>           
+#include <asio.hpp>   
+#include <iostream>           //include cout,cerr      
 #include <viface/viface.hpp>  //include VIface
 
 using namespace std::chrono; //for literal 's
+
+const uint DEFAULT_MTU = 1500;
 
 namespace viface::utils
 {
@@ -17,6 +19,7 @@ class tun_stream
     : public std::enable_shared_from_this<tun_stream>,
       private asio::detail::noncopyable
 {
+    
     //since libviface does NOT export getRX(), we need fake it.
     //orignal source see <https://github.com/HPENetworking/libviface/blob/master/include/viface/private/viface.hpp>
     class VIface_adaptor
@@ -30,9 +33,9 @@ class tun_stream
         {
             struct viface_queues queues;
         };
-
-      public:
         std::unique_ptr<VIfaceImpl> pimpl;
+      public:
+        
         int getRX() { return pimpl->queues.rx; }
         int getTX() { return pimpl->queues.tx; }
     };
@@ -41,12 +44,14 @@ class tun_stream
     explicit tun_stream(asio::io_context &ios)
         : io_context_(ios),
           viface_("tun0", false),
-          tun_(ios, ((VIface_adaptor *)(&viface_))->getRX()),
-          timer_(ios)
+          timer_(ios),
+          streambuf_(),
+          //NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+          tun_(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getRX())
     {
         viface_.setIPv4("10.0.0.1");
         viface_.setIPv4Netmask("255.255.255.0");
-        viface_.setMTU(1500);
+        viface_.setMTU(DEFAULT_MTU);
     }
 
     void run()
@@ -79,7 +84,7 @@ class tun_stream
     }
     void read_packet()
     {
-        auto buffer = streambuf_.prepare(1500);
+        auto buffer = streambuf_.prepare(DEFAULT_MTU);
         tun_.async_read_some(
             buffer,
             [this](const asio::error_code &ec, std::size_t bytes_read) {
@@ -112,8 +117,8 @@ class tun_stream
     asio::streambuf streambuf_;
 };
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const * argv[])
+{    
     asio::io_context io_context;
     tun_stream server(io_context);
 
