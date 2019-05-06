@@ -15,8 +15,8 @@ namespace viface::utils
 }   // namespace viface::utils
 
 
-class tun_stream
-    : public std::enable_shared_from_this<tun_stream>,
+class tun_rx_stream
+    : public std::enable_shared_from_this<tun_rx_stream>,
       private asio::detail::noncopyable
 {
     
@@ -41,13 +41,13 @@ class tun_stream
     };
 
   public:
-    explicit tun_stream(asio::io_context &ios)
+    explicit tun_rx_stream(asio::io_context &ios)
         : io_context_(ios),
           viface_("tun0", false),
           timer_(ios),
           streambuf_(),
           //NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-          tun_(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getRX())
+          tun_rx_(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getRX())
     {
         viface_.setIPv4("10.0.0.1");
         viface_.setIPv4Netmask("255.255.255.0");
@@ -57,7 +57,7 @@ class tun_stream
     void run()
     {
         //setup interface
-        tun_.non_blocking(true);
+        tun_rx_.non_blocking(true);
         viface_.up();
 
         //start timer
@@ -85,7 +85,7 @@ class tun_stream
     void read_packet()
     {
         auto buffer = streambuf_.prepare(DEFAULT_MTU);
-        tun_.async_read_some(
+        tun_rx_.async_read_some(
             buffer,
             [this](const asio::error_code &ec, std::size_t bytes_read) {
                 this->read_packet_done(ec, bytes_read);
@@ -110,7 +110,7 @@ class tun_stream
     asio::io_context &io_context_;
     viface::VIface viface_;
 
-    asio::posix::stream_descriptor tun_;
+    asio::posix::stream_descriptor tun_rx_;
     asio::steady_timer timer_;
     std::chrono::steady_clock::time_point start_time_;
 
@@ -120,7 +120,7 @@ class tun_stream
 int main(int argc, char const * argv[])
 {    
     asio::io_context io_context;
-    tun_stream server(io_context);
+    tun_rx_stream server(io_context);
 
     std::cout << "Welcome to tun libtcp asio laboratory.\n";
     server.run();

@@ -6,7 +6,7 @@ code based on following lecture:
 youtube <https://www.youtube.com/watch?v=bzja9fQWzdA>  
 code <https://github.com/jonhoo/rust-tcp>  
 
-see same lab rust project [here](https://github.com/corbamico/tun_libtcp)
+see same lab rust project [here](https://github.com/corbamico/tun_rx_libtcp)
 
 ## Dependencies
 
@@ -29,6 +29,7 @@ see same lab rust project [here](https://github.com/corbamico/tun_libtcp)
 
 * description  
   Hump hex stream, which received from tun.
+
   ```shell
   mkdir build && cd build && cmake .. && make
   #run lab1 as 
@@ -36,6 +37,11 @@ see same lab rust project [here](https://github.com/corbamico/tun_libtcp)
   #open another shell to send tcp package
   nc -s 10.0.0.1 10.0.0.5 8000
   ```
+
+### lab2
+* description  
+  icmp ping ack server, which received from tun.
+
 
 ## License
 
