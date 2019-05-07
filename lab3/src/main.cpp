@@ -63,7 +63,7 @@ void generate_echo_reply(Tins::byte_array &vec,
 {
     assert(packet_len > ipheader_len && ipheader_len >= 20); //NOLINT
     //step1. swap src_addr/dst_addr
-    
+
     std::swap_ranges(&vec[12], &vec[16], &vec[16]); //NOLINT(cppcoreguidelines-avoid-magic-numbers)
     //step2. set type/code = Echo Reply
     vec[ipheader_len] = 0x00;
@@ -101,10 +101,21 @@ class tun_rx_stream
         int getRX() { return pimpl->queues.rx; }
         int getTX() { return pimpl->queues.tx; }
     };
-    enum class QueueIndex
+    enum class channel_index
     {
-        Queue1,
-        Queue2,
+        channel0 = 0,
+        channel1 = 1,
+    };
+    struct channel
+    {
+        channel(asio::io_context &ios, int rawfd)
+            : tun_stream_(ios, rawfd),
+              buffer_(DEFAULT_MTU),
+              writer_buffer_(DEFAULT_MTU) {}
+        asio::posix::stream_descriptor tun_stream_; //libivface use 2 RawFD, usually 1 for rx,2 for tx
+                                                    //but sometimes, icmp packet comes from tx.
+        std::vector<uint8_t> buffer_;               //read buffer
+        std::vector<uint8_t> writer_buffer_;        //writer buffer
     };
 
   public:
@@ -112,12 +123,10 @@ class tun_rx_stream
         : io_context_(ios),
           viface_("tun0", false),
           timer_(ios),
-          buffer_1_(DEFAULT_MTU), write_buffer_1_(DEFAULT_MTU),
-          buffer_2_(DEFAULT_MTU), write_buffer_2_(DEFAULT_MTU),
-          //NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-          tun_rx_(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getRX()),
-          //NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-          tun_tx_(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getTX())
+          channels_{
+              channel(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getRX()), //NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+              channel(ios, (reinterpret_cast<VIface_adaptor *>(&viface_))->getTX())  //NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+              }
     {
         viface_.setIPv4("10.0.0.1");
         viface_.setIPv4Netmask("255.255.255.0");
@@ -127,7 +136,9 @@ class tun_rx_stream
     void run()
     {
         //setup interface
-        tun_rx_.non_blocking(true);
+        channels_[0].tun_stream_.non_blocking(true);
+        channels_[1].tun_stream_.non_blocking(true);
+
         viface_.up();
 
         //start timer
@@ -138,8 +149,8 @@ class tun_rx_stream
         });
 
         //start async read
-        read_packet(QueueIndex::Queue1);
-        read_packet(QueueIndex::Queue2);
+        read_packet(channel_index::channel0);
+        read_packet(channel_index::channel1);
 
         io_context_.run();
     }
@@ -154,44 +165,31 @@ class tun_rx_stream
             this->on_timer(ec);
         });
     }
-    void read_packet(QueueIndex queue)
+    void read_packet(channel_index index)
     {
-        if (queue == QueueIndex::Queue1)
-        {
-            tun_rx_.async_read_some(
-                asio::buffer(buffer_1_),
-                [this, queue](const asio::error_code &ec, std::size_t bytes_read) {
-                    this->read_packet_done(ec, bytes_read, queue);
+        channel &current_channel = channels_.at(uint8_t(index));
+        current_channel
+            .tun_stream_
+            .async_read_some(
+                asio::buffer(current_channel.buffer_),
+                [this, index](const asio::error_code &ec, std::size_t bytes_read) {
+                    this->read_packet_done(ec, bytes_read, index);
                 });
-        }
-        else
-        {
-            tun_tx_.async_read_some(
-                asio::buffer(buffer_2_),
-                [this, queue](const asio::error_code &ec, std::size_t bytes_read) {
-                    this->read_packet_done(ec, bytes_read, queue);
-                });
-        }
     }
-    void read_packet_done(const asio::error_code ec, std::size_t bytes_read, QueueIndex queue)
+    void read_packet_done(
+        const asio::error_code ec,
+        std::size_t bytes_read,
+        channel_index index)
     {
         if (!ec)
         {
             Tins::IP ip;
             Tins::ICMP *icmp;
 
-            if (queue == QueueIndex::Queue1)
-            {
-                std::copy_n(std::begin(buffer_1_), bytes_read, std::begin(write_buffer_1_));
-                ip = Tins::IP(&write_buffer_1_[0], bytes_read);
-                icmp = ip.find_pdu<Tins::ICMP>();
-            }
-            else
-            {
-                std::copy_n(std::begin(buffer_2_), bytes_read, std::begin(write_buffer_2_));
-                ip = Tins::IP(&write_buffer_1_[0], bytes_read);
-                icmp = ip.find_pdu<Tins::ICMP>();
-            }
+            channel &current_channel = channels_.at(uint8_t(index));
+            std::copy_n(std::begin(current_channel.buffer_), bytes_read, std::begin(current_channel.writer_buffer_));
+            ip = Tins::IP(&current_channel.writer_buffer_[0], bytes_read);
+            icmp = ip.find_pdu<Tins::ICMP>();
 
             // Tips: dump packet here.
             // std::cerr << std::endl
@@ -201,52 +199,27 @@ class tun_rx_stream
                 && icmp != nullptr && icmp->type() == Tins::ICMP::Flags::ECHO_REQUEST)
             {
                 //if packet is icmp.echo.request, then we reply as icmp.echo.reply
-                if (queue == QueueIndex::Queue1)
-                {
-                    //since we use different buffer for read/write,
-                    //we can call read_packet immediate.
-                    Tins::Utils::generate_echo_reply(write_buffer_1_, bytes_read, ip.header_size());
-                    asio::async_write(tun_rx_,
-                                      asio::buffer(write_buffer_1_, bytes_read),
-                                      [this, queue](const asio::error_code ec, std::size_t bytes_write) {
-                                          this->write_packet_done(ec, bytes_write, queue);
-                                      });
-                    
-                }
-                else
-                {
-                    Tins::Utils::generate_echo_reply(write_buffer_2_, bytes_read, ip.header_size());
-                    asio::async_write(tun_tx_,
-                                      asio::buffer(write_buffer_2_, bytes_read),
-                                      [this, queue](const asio::error_code ec, std::size_t bytes_write) {
-                                          this->write_packet_done(ec, bytes_write, queue);
-                                      });
-                    
-                }
+                Tins::Utils::generate_echo_reply(current_channel.writer_buffer_, bytes_read, ip.header_size());
+                asio::async_write(current_channel.tun_stream_,
+                                  asio::buffer(current_channel.writer_buffer_, bytes_read),
+                                  [this, index](const asio::error_code ec, std::size_t bytes_write) {
+                                      this->write_packet_done(ec, bytes_write, index);
+                                  });
             }
-            read_packet(queue);
+            read_packet(index);
         }
     }
 
-    inline void write_packet_done(const asio::error_code ec, std::size_t bytes_write, QueueIndex queue)
+    inline void write_packet_done(const asio::error_code ec, std::size_t bytes_write, channel_index queue)
     {
     }
 
   private:
     asio::io_context &io_context_;
     viface::VIface viface_;
-
-    asio::posix::stream_descriptor tun_rx_; //libivface use 2 queue
-    asio::posix::stream_descriptor tun_tx_; //libivface use 2 queue
-
     asio::steady_timer timer_;
     std::chrono::steady_clock::time_point start_time_;
-
-    std::vector<uint8_t> buffer_1_; //read buffer for queue 1
-    std::vector<uint8_t> buffer_2_; //read buffer for queue 2
-
-    std::vector<uint8_t> write_buffer_1_; //write buffer for queue 1
-    std::vector<uint8_t> write_buffer_2_; //write buffer for queue 2
+    std::array<channel,2> channels_; 
 };
 
 int main(int argc, char const *argv[])

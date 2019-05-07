@@ -17,10 +17,10 @@ see same lab rust project [here](https://github.com/corbamico/tun_rx_libtcp)
   ```  
   if libviface.so.1.1.0 cannot loaded, copy it to LD_LIBRARY_PATH
 
-* asio (standalone mode)
+* asio (standalone mode) and libtins
 
   ```shell
-  sudo apt-get install libasio-dev
+  sudo apt-get install libasio-dev libtins-dev
   ```
 
 ## laboratory
