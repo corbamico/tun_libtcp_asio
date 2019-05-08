@@ -48,6 +48,10 @@ see same lab rust project [here](https://github.com/corbamico/tun_rx_libtcp)
 * description  
   icmp ping ack server, re-factory lab2, using separate read/write buffer.
 
+### lab4
+
+* description  
+  simple tcp server, handle syn/psh/fin tcp connection, and print tcp payload on std::cout.
 
 ## Reference
 
