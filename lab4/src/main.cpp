@@ -90,7 +90,11 @@ class PDU_Proxy: public T
         T::serialize(buffer, total_sz);
     }    
 };
-typedef PDU_Proxy<IP> IP_Proxy;
+using IP_Proxy=PDU_Proxy<IP>;
+enum IP_Protocol:uint8_t{
+    Protocol_ICMP = 1,
+    Protocol_TCP = 6,
+};
 } // namespace Tins
 
 class tun_rx_stream
@@ -212,13 +216,15 @@ class tun_rx_stream
             // Tips: dump packet here.
             // std::cerr << std::endl << viface::utils::hexdump(vec);
 
-            if (ip.protocol() == 1 /*icmp*/ && icmp != nullptr)
+            if (ip.protocol() == Tins::IP_Protocol::Protocol_ICMP /*icmp*/)
             {
-                handle_icmp_packet(ip, *icmp, index);
+                if (icmp != nullptr)
+                    handle_icmp_packet(ip, *icmp, index);
             }
-            else if ((ip.protocol() == 6 /*tcp*/) && tcp != nullptr)
+            else if ((ip.protocol() == Tins::IP_Protocol::Protocol_TCP /*tcp*/))
             {
-                handle_tcp_packet(ip, *tcp, index);
+                if (tcp != nullptr)
+                    handle_tcp_packet(ip, *tcp, index);
             }
             read_packet(index);
         }
@@ -281,7 +287,7 @@ class tun_rx_stream
 
         response_ip /= response_tcp;
 
-        (static_cast<Tins::IP_Proxy *>(&response_ip))->serialize(&current_channel.writer_buffer_[0], response_ip.size());
+        (dynamic_cast<Tins::IP_Proxy *>(&response_ip))->serialize(&current_channel.writer_buffer_[0], response_ip.size());
 
         asio::async_write(current_channel.tun_stream_,
                           asio::buffer(current_channel.writer_buffer_, response_ip.size()),
@@ -296,7 +302,6 @@ class tun_rx_stream
     {
         std::cout<<"\n[TCP on Receive Data]\n"<< viface::utils::hexdump(data) <<std::endl;
     }
-
   private:
     asio::io_context &io_context_;
     viface::VIface viface_;
@@ -309,6 +314,7 @@ int main(int argc, char const *argv[])
 {
     asio::io_context io_context;
     tun_rx_stream server(io_context);
+    asio::ip::tcp::acceptor acceptor(io_context);
 
     std::cout << "Welcome to tun libtcp asio laboratory.\n";
     server.run();
