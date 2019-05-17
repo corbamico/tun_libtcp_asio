@@ -58,6 +58,13 @@ see same lab rust project [here](https://github.com/corbamico/tun_rx_libtcp)
 * description  
   simple tcp server/session, handle all tcp status transaction of server side via using boost::sml state_machine
 
+### lab6
+
+* description  
+  - [x] simple tcp server/session,  
+  - [x] allow multiply clients,  
+  - [x] handle all tcp status transaction of server side via using boost::sml state_machine,
+  - [x] max sessions, and timeout at synrcvd to simple avoid syn-flood,
 
 ## Reference
 
