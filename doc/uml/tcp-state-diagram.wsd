@@ -1,0 +1,15 @@
+@startuml TCP Connection State Diagram
+[*]     -->  listen 
+listen   --> synrcvd  : rcv_syn / act_send_syn_ack
+synrcvd  --> estab    : rcv ack of syn 
+estab    --> closewait : rcv fin / act_send_ack 
+estab    --> finwait1  : CLOSE / act_send_fin 
+closewait --> lastack  : CLOSE / act_send_fin  
+lastack   --> closed   : rcv ack of fin 
+finwait1  --> finwait2 : rcv ack of fin 
+finwait2  --> timewait : rcv fin / act_send_ack  
+finwait1  --> closing : rcv fin / act_send_ack   
+closing   --> timewait : rcv ack of fin 
+timewait  --> closed  : timeout / act_delete_tcb 
+closed    --> [*]
+@enduml

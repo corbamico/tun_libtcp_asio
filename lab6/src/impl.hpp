@@ -88,6 +88,7 @@ struct tcp_state_machine
     void on_close();
     void register_timeout();
     void delay_close();
+    void cancel_timer();
   };
   /// events
   struct rcv_syn
@@ -166,6 +167,7 @@ struct tcp_state_machine
     // even though this is not in standard 'TCP Connection State Diagram'
     auto act_entry_closewait = [](context& ctx) { ctx.delay_close(); };
     auto act_entry_synrcvd   = [](context& ctx) { ctx.delay_close(); };
+    auto act_exit_synrcvd   = [](context& ctx) { ctx.cancel_timer(); };
 
     // clang-format off
     return make_transition_table(
@@ -186,7 +188,8 @@ struct tcp_state_machine
         "timewait"_s  + on_entry<_> / act_entry_timewait,
         "closed"_s    + on_entry<_> / act_entry_closed,        
         "closewait"_s + on_entry<_> / act_entry_closewait,
-        "synrcvd"_s   + on_entry<_> / act_entry_synrcvd
+        "synrcvd"_s   + on_entry<_> / act_entry_synrcvd,
+        "synrcvd"_s   + boost::sml::on_exit<_>  / act_exit_synrcvd
         );
     // clang-format on
   }
@@ -227,6 +230,7 @@ public:
   void register_timeout();
   void fire_timeout();
   void delay_close();
+  void cancel_timer();
 
   /// on_close()
   /// sm entry 'closed state'
@@ -245,9 +249,10 @@ public:
   {
     return uint64_t(tcp.sport()) << 32 | uint64_t(uint32_t(ip.src_addr()));
   }
-  ~tun_tcp_session(){
-    std::cerr<<"\n[debug] ~tun_tcp_session() called. \n";
-  }
+  ~tun_tcp_session() = default;
+  // {
+  //   // std::cerr<<"\n[debug] ~tun_tcp_session() called. \n";
+  // }
 
 private:
   tcp_state_machine::context sm_context_;

@@ -112,6 +112,11 @@ tcp_state_machine::context::delay_close()
 {
   session_ptr_->delay_close();
 }
+void
+tcp_state_machine::context::cancel_timer()
+{
+  session_ptr_->cancel_timer();
+}
 
 uint32_t
 tun_tcp_session::send(Tins::byte_array& payload)
@@ -172,7 +177,7 @@ void
 tun_tcp_session::register_timeout()
 {
   timeout_.expires_after(1s);
-  timeout_.async_wait([this](const asio::error_code& ec) { this->fire_timeout(); });
+  timeout_.async_wait([this](const asio::error_code& ec) { if(!ec) this->fire_timeout(); });
 }
 void
 tun_tcp_session::fire_timeout()
@@ -183,9 +188,14 @@ void
 tun_tcp_session::delay_close()
 {
   delay_.expires_after(1s);
-  delay_.async_wait([this](const asio::error_code& ec) { this->close(); });
+  delay_.async_wait([this](const asio::error_code& ec) { if(!ec) this->close(); });
 }
-
+void
+tun_tcp_session::cancel_timer()
+{
+  //asio::error_code ec();
+  delay_.cancel();  
+}
 void
 tun_tcp_session::on_close()
 {
