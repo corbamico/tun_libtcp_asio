@@ -64,7 +64,25 @@ see same lab rust project [here](https://github.com/corbamico/tun_rx_libtcp)
   - [x] simple tcp server/session,  
   - [x] allow multiply clients,  
   - [x] handle all tcp status transaction of server side via using boost::sml state_machine,
-  - [x] max sessions, and timeout at synrcvd to simple avoid syn-flood,
+  - [x] max sessions, and timeout at synrcvd to simple avoid syn-flood,  
+
+iperf througput test in container (docker in windows 10) as:
+
+```shell
+/h/c/tun_libtcp_asio# iperf -c 10.0.0.100 -t 5 -p 8000 -i 1        
+------------------------------------------------------------                         
+Client connecting to 10.0.0.100, TCP port 8000                                       
+TCP window size: 45.0 KByte (default)                                                
+------------------------------------------------------------                         
+[  3] local 10.0.0.1 port 46526 connected with 10.0.0.100 port 8000                  
+[ ID] Interval       Transfer     Bandwidth                                          
+[  3]  0.0- 1.0 sec  37.5 MBytes   315 Mbits/sec                                     
+[  3]  1.0- 2.0 sec  36.9 MBytes   309 Mbits/sec                                     
+[  3]  2.0- 3.0 sec  37.6 MBytes   316 Mbits/sec                                     
+[  3]  3.0- 4.0 sec  37.6 MBytes   316 Mbits/sec                                     
+[  3]  4.0- 5.0 sec  36.9 MBytes   309 Mbits/sec                                     
+[  3]  0.0- 5.0 sec   186 MBytes   313 Mbits/sec                                     
+```
 
 ## Reference
 

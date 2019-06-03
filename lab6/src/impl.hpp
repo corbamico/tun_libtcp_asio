@@ -320,8 +320,10 @@ public:
   /// FIXME: need async function call.
   void send(Tins::byte_array& data);
 
-  asio::io_context& get_io_context() const { return io_context_; }  
-  void delete_session(uint64_t map_key){ sessions_.erase(map_key);}
+  asio::io_context& get_io_context() const { return io_context_; } 
+
+  //delete_session should be delay exec, can not call from session itself. 
+  void delete_session(uint64_t map_key);
 
 private:
   void on_timer(const asio::error_code ec);

@@ -312,14 +312,18 @@ tun_server::read_packet(channel_index index)
 void
 tun_server::read_packet_done(const asio::error_code ec, std::size_t bytes_read, channel_index index)
 {
-  if (!ec) {
-    Tins::IP ip;
+  if ((!ec)&&(bytes_read>0)) {
+    //Tins::IP ip;
     Tins::ICMP* icmp;
     Tins::TCP* tcp;
 
     channel& current_channel = channels_.at(uint8_t(index));
     std::copy_n(std::begin(current_channel.buffer_), bytes_read, std::begin(current_channel.writer_buffer_));
-    ip = Tins::IP(&current_channel.writer_buffer_[0], bytes_read);
+
+    //Bug in libtins: 
+    //  ~IP().~Vector() for options_ if "_GLIBCXX_PROFILE"    
+    Tins::IP ip(&current_channel.writer_buffer_[0], bytes_read);
+
     icmp = ip.find_pdu<Tins::ICMP>();
     tcp = ip.find_pdu<Tins::TCP>();
 
@@ -356,7 +360,8 @@ tun_server::handle_tcp_packet(Tins::IP& ip, Tins::TCP& tcp, channel_index index)
   tun_tcp_session* session_ptr{ nullptr };
   auto key = tun_tcp_session::get_key(ip, tcp);
 
-  if (sessions_.count(key)) {
+  //map.contains implements in g++-9
+  if (sessions_.contains(key)) {
     // we only get raw pointer, do not move/assign unique_ptr out of map.
     // keep unique_ptr in map.
     session_ptr = sessions_.at(key).get();
@@ -387,4 +392,13 @@ void
 tun_server::write_packet_done(const asio::error_code ec, std::size_t bytes_write, channel_index queue)
 {
   // currently, empty.
+}
+
+void
+tun_server::delete_session(uint64_t map_key)
+{
+  asio::steady_timer timer(io_context_);
+  timer.expires_after(3s);
+  timer.async_wait([this,map_key](const asio::error_code& ec) { this->sessions_.erase(map_key); });
+  //sessions_.erase(map_key);
 }

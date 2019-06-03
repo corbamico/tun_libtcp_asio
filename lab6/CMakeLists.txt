@@ -17,6 +17,8 @@ endif()
 target_include_directories(lab6 PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_definitions(lab6 PUBLIC ASIO_STANDALONE ASIO_NO_DEPRECATED
    #ASIO_ENABLE_HANDLER_TRACKING
+   #_GLIBCXX_PROFILE
 )
-target_compile_options(lab6 PUBLIC -std=c++2a)
+target_compile_options(lab6 PUBLIC -std=c++2a -fsanitize=address)
+target_link_options(lab6 PUBLIC -fsanitize=address)
 target_link_libraries(lab6 pthread viface tins)
